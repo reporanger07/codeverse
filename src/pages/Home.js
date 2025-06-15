@@ -72,10 +72,10 @@ const Home = () => {
         </div>
       </div>
       <footer>
-        <h4>
+        {/* <h4>
           Built with 💛 &nbsp; by &nbsp;
           <a href="https://github.com/sandeepmegharaj">TechIdiots</a>
-        </h4>
+        </h4> */}
       </footer>
     </div>
   );
