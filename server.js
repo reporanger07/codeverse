@@ -42,7 +42,7 @@ app.post("/api/ai-chat", async (req, res) => {
 
 app.use(express.static(path.join(__dirname, "build")));
 
-app.get("*", (req, res) => {
+app.get("/*", (req, res) => {
   if (!req.originalUrl.startsWith("/api")) {
     res.sendFile(path.join(__dirname, "build", "index.html"));
   }
