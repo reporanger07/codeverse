@@ -4,6 +4,7 @@ import ACTIONS from "../Actions";
 import Client from "../components/Client";
 import Editor from "../components/Editor";
 import FileSidebar from "../components/FileSidebar";
+import AIChat from "../components/AIChat";
 import { initSocket } from "../socket";
 import {
   useLocation,
@@ -11,7 +12,13 @@ import {
   Navigate,
   useParams,
 } from "react-router-dom";
-
+const SYSTEM_PROMPT = `
+1. If the user asks for code, *return only the code.* with no explanations or additional text and comments.
+2. If the user asks for an explanation or concept, respond in a concise, beginner-friendly way with minimal but relevant code examples.
+3. When showing code in explanations, keep it short and focused — use only what is needed to understand the concept.
+4. If the user selects or pastes a piece of code and asks a question about it, provide a brief explanation and possible improvements.
+You are a helpful coding assistant. Answer clearly and concisely.
+`;
 const EditorPage = () => {
   const socketRef = useRef(null);
   const location = useLocation();
@@ -72,7 +79,8 @@ const EditorPage = () => {
         socketRef.current.off(ACTIONS.FILE_CHANGE);
       }
     };
-  }, []); // Note: leaving this empty as it appears to be the working configuration on your end.
+    // eslint-disable-next-line
+  }, []);
 
   const handleFileSelect = (fileName) => setActiveFile(fileName);
 
@@ -90,7 +98,6 @@ const EditorPage = () => {
 
   // ==================== NEW EVENT HANDLER FOR RENAMING ====================
   const handleFileRename = (oldFileName, newFileName) => {
-    // Prevent renaming to a file that already exists
     if (files[newFileName] !== undefined) {
       toast.error(`A file named "${newFileName}" already exists.`);
       return;
@@ -127,12 +134,26 @@ const EditorPage = () => {
     reactNavigator("/");
   }
 
+  // AIChat handler
+  const onSend = async (message) => {
+    const res = await fetch("/api/ai-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message,
+        systemPrompt: SYSTEM_PROMPT,
+       }),
+    });
+    const data = await res.json();
+    return data.reply;
+  };
+
   if (!location.state) {
     return <Navigate to="/" />;
   }
 
   return (
     <div className="mainWrap">
+      {/* Sidebar (left) */}
       <div className="aside">
         <div className="asideInner">
           <div className="logo">
@@ -149,7 +170,7 @@ const EditorPage = () => {
             onFileSelect={handleFileSelect}
             onNewFile={handleNewFile}
             onFileDelete={handleDeleteFile}
-            onFileRename={handleFileRename} // <-- NEW PROP
+            onFileRename={handleFileRename}
             activeFile={activeFile}
           />
         </div>
@@ -160,12 +181,19 @@ const EditorPage = () => {
           Leave
         </button>
       </div>
+
+      {/* Editor (center) */}
       <div className="editorWrap">
         <Editor
           activeFile={activeFile}
           code={files[activeFile]}
           onCodeChange={handleCodeChange}
         />
+      </div>
+
+      {/* AI Chat (right) */}
+      <div className="chatPanel">
+        <AIChat onSend={onSend} />
       </div>
     </div>
   );

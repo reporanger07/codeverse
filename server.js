@@ -5,10 +5,45 @@ const app = express();
 const http = require("http");
 const path = require("path");
 const { Server } = require("socket.io");
+const axios = require("axios");
 const ACTIONS = require("./src/Actions");
+require('dotenv').config();
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const PORT = process.env.PORT || 5000;
+
 
 const server = http.createServer(app);
 const io = new Server(server);
+
+
+app.use(express.json()); 
+
+
+
+app.post("/api/ai-chat", async (req, res) => {
+  const { message } = req.body;
+  try {
+    const geminiRes = await axios.post(
+      "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent", // <-- updated model
+      { contents: [{ parts: [{ text: message }] }] },
+      { params: { key: GEMINI_API_KEY } }
+    );
+    const aiText =
+      geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "Sorry, no response.";
+    res.json({ reply: aiText });
+  } catch (error) {
+    console.error("Gemini API error:", error.response?.data || error.message);
+    res.status(500).json({ error: "AI service error." });
+  }
+});
+
+
+app.use(express.static("build"));
+app.use((req, res, next) => {
+  res.sendFile(path.join(__dirname, "build", "index.html"));
+});
 
 app.use(express.static("build"));
 app.use((req, res, next) => {
@@ -140,5 +175,5 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+// const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`Listening on port ${PORT}`));
