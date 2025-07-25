@@ -1,4 +1,4 @@
-// server.js
+
 
 const express = require("express");
 const app = express();
@@ -40,15 +40,16 @@ app.post("/api/ai-chat", async (req, res) => {
 });
 
 
-app.use(express.static("build"));
-app.use((req, res, next) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
+app.use(express.static(path.join(__dirname, "build")));
+
+app.get("*", (req, res) => {
+  if (!req.originalUrl.startsWith("/api")) {
+    res.sendFile(path.join(__dirname, "build", "index.html"));
+  }
 });
 
-app.use(express.static("build"));
-app.use((req, res, next) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
-});
+
+
 
 const userSocketMap = {};
 // This object will store the state of each room (files and their content)
