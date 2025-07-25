@@ -11,7 +11,7 @@ export const initSocket = async () => {
   const BACKEND_URL =
     process.env.NODE_ENV === "development"
       ? "http://localhost:5000"
-      : "https://codeverse-0gvh-backend.onrender.com"; // Replace with your actual backend Render URL
+      : "wss://codeverse-0gvh-backend.onrender.com"; // Replace with your actual backend Render URL
 
   return io(BACKEND_URL, options);
 };
