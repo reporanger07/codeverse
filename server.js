@@ -7,14 +7,26 @@ const path = require("path");
 const { Server } = require("socket.io");
 const axios = require("axios");
 const ACTIONS = require("./src/Actions");
+const cors = require("cors");
 require('dotenv').config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const PORT = process.env.PORT || 5000;
 
+const FRONTEND_URL = "https://codeverse-0gvh.onrender.com"; 
 
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: FRONTEND_URL,
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+});
+
+
+
+
 
 
 app.use(express.json()); 

@@ -3,9 +3,15 @@ import { io } from "socket.io-client";
 export const initSocket = async () => {
   const options = {
     "force new connection": true,
-    reconnectionAttempt: "Infinity",
+    reconnectionAttempts: Infinity,
     timeout: 10000,
     transports: ["websocket"],
   };
-  return io("http://localhost:5000", options); // Make sure this matches your backend port
+
+  const BACKEND_URL =
+    process.env.NODE_ENV === "development"
+      ? "http://localhost:5000"
+      : "https://codeverse-0gvh-backend.onrender.com"; // Replace with your actual backend Render URL
+
+  return io(BACKEND_URL, options);
 };
