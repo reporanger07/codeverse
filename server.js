@@ -13,9 +13,8 @@ const io = new Server(server);
 
 const Room = require("./models/Room");
 
-app.use(express.static("build"));
-app.use((req, res, next) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
+app.get("/", (req, res) => {
+  res.send(" backend is running ");
 });
 
 const userSocketMap = {};
