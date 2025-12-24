@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import Codemirror from "codemirror";
 import "codemirror/lib/codemirror.css";
-import "codemirror/theme/dracula.css";
+import "codemirror/theme/material-darker.css";
+
 import "codemirror/mode/javascript/javascript";
 import "codemirror/mode/xml/xml";
 import "codemirror/mode/css/css";
@@ -24,7 +25,7 @@ const Editor = ({ activeFile, code, onCodeChange }) => {
   useEffect(() => {
     if (textAreaRef.current && !editorRef.current) {
       const editor = Codemirror.fromTextArea(textAreaRef.current, {
-        theme: "dracula",
+        theme: "material-darker",
         autoCloseTags: true,
         autoCloseBrackets: true,
         lineNumbers: true,

@@ -124,8 +124,12 @@ const EditorPage = () => {
   }
 
   function leaveRoom() {
-    reactNavigator("/");
+  if (socketRef.current) {
+    socketRef.current.disconnect();
   }
+  reactNavigator("/");
+}
+
 
   if (!location.state) {
     return <Navigate to="/" />;

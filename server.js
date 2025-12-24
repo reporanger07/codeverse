@@ -6,9 +6,12 @@ const http = require("http");
 const path = require("path");
 const { Server } = require("socket.io");
 const ACTIONS = require("./src/Actions");
-
+require("dotenv").config();
+require("./db");
 const server = http.createServer(app);
 const io = new Server(server);
+
+const Room = require("./models/Room");
 
 app.use(express.static("build"));
 app.use((req, res, next) => {
@@ -33,21 +36,68 @@ function getAllConnectedClients(roomId) {
 io.on("connection", (socket) => {
   console.log("socket connected", socket.id);
 
-  socket.on(ACTIONS.JOIN, ({ roomId, username }) => {
+  // socket.on(ACTIONS.JOIN, ({ roomId, username }) => {
+  //   userSocketMap[socket.id] = username;
+  //   socket.join(roomId);
+
+  //   // If the room is new, initialize it with a default file
+  //   if (!roomState[roomId]) {
+  //     roomState[roomId] = {
+  //       files: {
+  //         "script.js": `// Welcome to your new room!\nconsole.log('Hello, world!');`,
+  //       },
+  //       activeFile: "script.js",
+  //     };
+  //   }
+
+  //   const clients = getAllConnectedClients(roomId);
+  //   clients.forEach(({ socketId }) => {
+  //     io.to(socketId).emit(ACTIONS.JOINED, {
+  //       clients,
+  //       username,
+  //       socketId: socket.id,
+  //     });
+  //   });
+
+  //   // Send the current file state to the newly joined user
+  //   io.to(socket.id).emit(ACTIONS.FILES_SYNC, roomState[roomId]);
+  // });
+
+  socket.on(ACTIONS.JOIN, async ({ roomId, username }) => {
     userSocketMap[socket.id] = username;
     socket.join(roomId);
 
-    // If the room is new, initialize it with a default file
+    // 🔹 Restore room from DB if not in memory
     if (!roomState[roomId]) {
-      roomState[roomId] = {
-        files: {
-          "script.js": `// Welcome to your new room!\nconsole.log('Hello, world!');`,
-        },
-        activeFile: "script.js",
-      };
+      let savedRoom = null;
+      try {
+        savedRoom = await Room.findOne({ roomId });
+      } catch (err) {
+        console.error("DB error while loading room:", err);
+      }
+
+      if (savedRoom) {
+        roomState[roomId] = {
+          files: Object.fromEntries(
+            savedRoom.files.map((f) => [f.name, f.content])
+          ),
+
+          activeFile: savedRoom.activeFile,
+        };
+        console.log(`Room ${roomId} restored from DB`);
+      } else {
+        // New room
+        roomState[roomId] = {
+          files: {
+            "script.js": "// Welcome to CodeVerse ",
+          },
+          activeFile: "script.js",
+        };
+      }
     }
 
     const clients = getAllConnectedClients(roomId);
+
     clients.forEach(({ socketId }) => {
       io.to(socketId).emit(ACTIONS.JOINED, {
         clients,
@@ -56,7 +106,7 @@ io.on("connection", (socket) => {
       });
     });
 
-    // Send the current file state to the newly joined user
+    // Send room state to newly joined user
     io.to(socket.id).emit(ACTIONS.FILES_SYNC, roomState[roomId]);
   });
 
@@ -115,28 +165,40 @@ io.on("connection", (socket) => {
   });
   // ========================================================================
 
-  socket.on("disconnecting", () => {
-    const rooms = [...socket.rooms];
-    rooms.forEach((roomId) => {
+  socket.on("disconnecting", async () => {
+    const rooms = [...socket.rooms].filter((roomId) => roomId !== socket.id);
+
+    for (const roomId of rooms) {
       socket.in(roomId).emit(ACTIONS.DISCONNECTED, {
         socketId: socket.id,
         username: userSocketMap[socket.id],
       });
-    });
 
-    // Clean up room state if no one is left
-    const allRooms = io.sockets.adapter.rooms;
-    rooms.forEach((roomId) => {
-      const room = allRooms.get(roomId);
-      // Check if room will be empty after this user disconnects
-      if (room && room.size === 1) {
+      const room = io.sockets.adapter.rooms.get(roomId);
+      const remainingUsers = room ? room.size - 1 : 0;
+
+      if (remainingUsers === 0 && roomState[roomId]) {
+        console.log("saving room", roomId, "to db");
+        await Room.findOneAndUpdate(
+          { roomId },
+          {
+            roomId,
+            files: Object.entries(roomState[roomId].files).map(
+              ([name, content]) => ({ name, content })
+            ),
+
+            activeFile: roomState[roomId].activeFile,
+            updatedAt: new Date(),
+          },
+          { upsert: true }
+        );
+
         delete roomState[roomId];
-        console.log(`Room ${roomId} state cleaned up.`);
+        console.log(`Room ${roomId} saved to MongoDB`);
       }
-    });
+    }
 
     delete userSocketMap[socket.id];
-    socket.leave();
   });
 });
 

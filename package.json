@@ -1,5 +1,5 @@
 {
-  "name": "realtime-editor",
+  "name": "codeverse-realtime-editor",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -8,6 +8,8 @@
     "@testing-library/user-event": "^13.5.0",
     "codemirror": "^5.65.2",
     "express": "^5.1.0",
+    "mongodb": "^7.0.0",
+    "mongoose": "^9.0.2",
     "react": "18",
     "react-avatar": "^4.0.0",
     "react-dom": "18",
