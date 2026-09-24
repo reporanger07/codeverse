@@ -8,6 +8,10 @@ export const initSocket = async () => {
     transports: ["websocket"],
   };
 
-  // SAME ORIGIN (frontend + backend)
-  return io(options);
+  const backendURL =
+    process.env.NODE_ENV === "production"
+      ? undefined 
+      : "http://localhost:5000";
+
+  return io(backendURL, options);
 };

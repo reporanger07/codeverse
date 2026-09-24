@@ -12,20 +12,17 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-------------------------------------------------------------------
-
 app.use(express.static(path.join(__dirname, "build")));
 
-app.get("*", (req, res) => {
+app.get("/*splat", (req, res) => {
   res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
-------------------------------------------------------------------
-
 const userSocketMap = {};
 const roomState = {};
-
-------------------------------------------------------------------
+// Rooms whose saved data could not be loaded from MongoDB.
+// We never save these back, so a failed load can't overwrite real data.
+const loadFailedRooms = new Set();
 
 function getAllConnectedClients(roomId) {
   return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
@@ -36,12 +33,8 @@ function getAllConnectedClients(roomId) {
   );
 }
 
-------------------------------------------------------------------
-
 io.on("connection", (socket) => {
   console.log("socket connected", socket.id);
-
-------------------------------------------------------------------
 
   socket.on(ACTIONS.JOIN, async ({ roomId, username }) => {
     userSocketMap[socket.id] = username;
@@ -51,24 +44,29 @@ io.on("connection", (socket) => {
       let savedRoom = null;
       try {
         savedRoom = await Room.findOne({ roomId });
+        loadFailedRooms.delete(roomId);
       } catch (err) {
-        console.error(err);
+        console.error("Failed to load room", err);
+        loadFailedRooms.add(roomId);
       }
 
-      if (savedRoom) {
-        roomState[roomId] = {
-          files: Object.fromEntries(
-            savedRoom.files.map((f) => [f.name, f.content])
-          ),
-          activeFile: savedRoom.activeFile,
-        };
-      } else {
-        roomState[roomId] = {
-          files: {
-            "script.js": "// Welcome to CodeVerse ",
-          },
-          activeFile: "script.js",
-        };
+      // Another join may have created the state while we were awaiting
+      if (!roomState[roomId]) {
+        if (savedRoom) {
+          roomState[roomId] = {
+            files: Object.fromEntries(
+              savedRoom.files.map((f) => [f.name, f.content])
+            ),
+            activeFile: savedRoom.activeFile,
+          };
+        } else {
+          roomState[roomId] = {
+            files: {
+              "script.js": "// Welcome to CodeVerse ",
+            },
+            activeFile: "script.js",
+          };
+        }
       }
     }
 
@@ -85,8 +83,6 @@ io.on("connection", (socket) => {
     io.to(socket.id).emit(ACTIONS.FILES_SYNC, roomState[roomId]);
   });
 
-------------------------------------------------------------------
-
   socket.on(ACTIONS.FILE_CHANGE, ({ roomId, fileName, newCode }) => {
     if (roomState[roomId] && roomState[roomId].files) {
       roomState[roomId].files[fileName] = newCode;
@@ -94,19 +90,15 @@ io.on("connection", (socket) => {
     }
   });
 
-------------------------------------------------------------------
-
   socket.on(ACTIONS.FILE_CREATE, ({ roomId, fileName }) => {
-    if (roomState[roomId] && !roomState[roomId].files[fileName]) {
+    if (roomState[roomId] && roomState[roomId].files[fileName] === undefined) {
       roomState[roomId].files[fileName] = "";
       io.to(roomId).emit(ACTIONS.FILES_SYNC, roomState[roomId]);
     }
   });
 
-------------------------------------------------------------------
-
   socket.on(ACTIONS.FILE_DELETE, ({ roomId, fileName }) => {
-    if (roomState[roomId] && roomState[roomId].files[fileName]) {
+    if (roomState[roomId] && roomState[roomId].files[fileName] !== undefined) {
       delete roomState[roomId].files[fileName];
 
       if (roomState[roomId].activeFile === fileName) {
@@ -118,8 +110,6 @@ io.on("connection", (socket) => {
       io.to(roomId).emit(ACTIONS.FILES_SYNC, roomState[roomId]);
     }
   });
-
-------------------------------------------------------------------
 
   socket.on(ACTIONS.FILE_RENAME, ({ roomId, oldFileName, newFileName }) => {
     const room = roomState[roomId];
@@ -140,8 +130,6 @@ io.on("connection", (socket) => {
     }
   });
 
-------------------------------------------------------------------
-
   socket.on("disconnecting", async () => {
     const rooms = [...socket.rooms].filter((r) => r !== socket.id);
 
@@ -155,28 +143,38 @@ io.on("connection", (socket) => {
       const remainingUsers = room ? room.size - 1 : 0;
 
       if (remainingUsers === 0 && roomState[roomId]) {
-        await Room.findOneAndUpdate(
-          { roomId },
-          {
-            roomId,
-            files: Object.entries(roomState[roomId].files).map(
-              ([name, content]) => ({ name, content })
-            ),
-            activeFile: roomState[roomId].activeFile,
-            updatedAt: new Date(),
-          },
-          { upsert: true }
-        );
+        if (loadFailedRooms.has(roomId)) {
+          console.warn(
+            `Skipping save for room ${roomId}: its saved data was never loaded`
+          );
+          delete roomState[roomId];
+          loadFailedRooms.delete(roomId);
+          continue;
+        }
 
-        delete roomState[roomId];
+        try {
+          await Room.findOneAndUpdate(
+            { roomId },
+            {
+              roomId,
+              files: Object.entries(roomState[roomId].files).map(
+                ([name, content]) => ({ name, content })
+              ),
+              activeFile: roomState[roomId].activeFile,
+              updatedAt: new Date(),
+            },
+            { upsert: true }
+          );
+          delete roomState[roomId];
+        } catch (err) {
+          console.error("Failed to save room", err);
+        }
       }
     }
 
     delete userSocketMap[socket.id];
   });
 });
-
-------------------------------------------------------------------
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`Listening on port ${PORT}`));

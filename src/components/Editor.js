@@ -39,6 +39,18 @@ const Editor = ({ activeFile, code, onCodeChange }) => {
           onCodeChangeRef.current(instance.getValue());
         }
       });
+
+      // Force CodeMirror to re-measure its container after layout settles.
+      // Without this, the editor can render at whatever height it saw the
+      // instant it was created, leaving dead space below it.
+      setTimeout(() => editor.refresh(), 0);
+
+      const handleResize = () => editor.refresh();
+      window.addEventListener("resize", handleResize);
+
+      return () => {
+        window.removeEventListener("resize", handleResize);
+      };
     }
   }, []); // Runs only on first mount
 
